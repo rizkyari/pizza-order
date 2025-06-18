@@ -1,0 +1,421 @@
+<template>
+  <section class="pizza-form">
+    <div class="pizza-form__content">
+      <div class="pizza-form__main">
+         <!-- Pizza Selection -->
+        <div>
+          <h2 class="pizza-form__title">Choose Your Pizza</h2>
+          <div class="pizza-form__pizzas">
+            <PizzaCard
+            v-for="pizza in pizzas"
+            :key="pizza.id"
+            :pizza="pizza"
+            :isSelected="selectedPizza?.id === pizza.id"
+            @select="onPizzaSelect"
+            />
+          </div>
+        </div>
+
+        <!-- Size Selection -->
+        <div>
+          <div class="pizza-form__sizes" v-if="selectedPizza">
+            <h2 class="pizza-form__title">Custom Pizza</h2>
+            <h3 class="pizza-form__subtitle">Size</h3>
+            <div class="pizza-form__size-options">
+              <label
+              v-for="size in sizes"
+              :key="size.name"
+              class="pizza-form__size"
+              :class="{ 'pizza-form__size--active': selectedSize === size.name }"
+              >
+                <input type="radio" :id="size.name" :value="size.name" v-model="selectedSize" />
+                {{ size.name }}
+                <span v-if="size.extra_price" class="pizza-form__extra-price"> (+{{ size.extra_price }}$)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Toppings -->
+        <div>
+          <div class="pizza-form__toppings" v-if="selectedPizza">
+            <h3 class="pizza-form__subtitle">Toppings</h3>
+            <label
+            v-for="topping in toppings"
+            :key="topping.id"
+            class="pizza-form__topping"
+            :class="{
+              'pizza-form__topping--disabled': !isToppingAllowed(topping.id),
+              'pizza-form__topping--active': selectedToppings.includes(topping.id)
+            }"
+            >
+              <input
+              type="checkbox"
+              :value="topping.id"
+              v-model="selectedToppings"
+              :disabled="!isToppingAllowed(topping.id)"
+              />
+              {{ topping.name }} (+${{ topping.price }})
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <!-- Summary -->
+        <div class="pizza-form__sidebar" v-if="selectedPizza">
+          <div class="pizza-form__summary">
+            <h3 class="summary__title">Payment Summary</h3>
+            <ul class="summary__list">
+              <li class="summary__item">
+                <span>{{ selectedPizza?.name }}</span>
+                <span class="summary__item-price">{{ basePrice.toFixed(2) }}$</span>
+              </li>
+              <li class="summary__item">
+                <span>Size - {{ selectedSize }}</span>
+                <span class="summary__item-price">{{ sizePrice.toFixed(2) }}$</span>
+              </li>
+              <li
+              class="summary__item"
+              v-for="id in selectedToppings"
+              :key="id"
+              >
+                <span>{{ getToppingName(id) }}</span>
+                <span class="summary__item-price">{{ getToppingPrice(id).toFixed(2) }}$</span>
+              </li>
+            </ul>
+
+            <hr class="summary__divider" />
+
+            <div class="summary__total">
+              <span>Total Price</span>
+              <span class="summary__total-amount">${{ totalPrice.toFixed(2) }}</span>
+            </div>
+
+            <button class="summary__button" @click="handleOrder">Order Now</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <BaseModal v-if="showModal" :onClose="() => (showModal = false)">
+      <img src="@/assets/img/icons/success-icon.svg" alt="Success" width="80" />
+      <h2>Order Success</h2>
+      <p>Thank you, we have received your order successfully.</p>
+    </BaseModal>
+  </section>
+</template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import PizzaCard from './PizzaCard.vue'
+import BaseModal from './BaseModal.vue'
+
+// types
+interface Pizza {
+  id: number
+  name: string
+  price: number
+  discount: {
+    is_active: boolean
+    final_price: number
+  }
+  toppings: number[]
+}
+
+interface Size {
+  id: number
+  name: string
+  extra_price: number
+}
+
+interface Topping {
+  id: number
+  name: string
+  price: number
+}
+
+// JSON & pizza images
+import pizzaList from '../assets/json/pizza-list.json'
+import sizeList from '../assets/json/size-list.json'
+import toppingList from '../assets/json/topping-list.json'
+import pizza1Img from '../assets/img/pizza/cheese.png'
+import pizza2Img from '../assets/img/pizza/veggie.png'
+import pizza3Img from '../assets/img/pizza/classic.png'
+
+const sizes = (sizeList as { data: Size[] }).data
+const toppings = (toppingList as { data: Topping[] }).data
+const imageMap: Record<number, string> = {
+  1: pizza1Img,
+  2: pizza2Img,
+  3: pizza3Img
+}
+const selectedPizza = ref<Pizza | null>(null)
+const selectedSize = ref<string>('Small')
+const selectedToppings = ref<number[]>([])
+const pizzas = ((pizzaList as { data: Pizza[] }).data).map((pizza) => ({
+  ...pizza,
+  image: imageMap[pizza.id] ?? ''
+}))
+const showModal = ref(false)
+
+function handleOrder() {
+  showModal.value = true
+}
+
+function onPizzaSelect(pizza: Pizza) {
+  selectedPizza.value = pizza
+  selectedSize.value = 'Small'
+  selectedToppings.value = []
+}
+
+function isToppingAllowed(toppingId: number) {
+  return selectedPizza.value?.toppings.includes(toppingId) ?? false
+}
+
+function getSizePrice(): number {
+  const size = sizes.find((s) => s.name === selectedSize.value)
+  return size?.extra_price ?? 0
+}
+
+function getToppingPrice(toppingId: number): number {
+  const topping = toppings.find((t) => t.id === toppingId)
+  return topping?.price ?? 0
+}
+
+const totalPrice = computed(() => {
+  if (!selectedPizza.value) return 0
+
+  const base = selectedPizza.value.price
+  const sizeExtra = getSizePrice()
+  const toppingsTotal = selectedToppings.value.reduce((sum, id) => {
+    return sum + getToppingPrice(id)
+  }, 0)
+
+  return base + sizeExtra + toppingsTotal
+})
+
+const basePrice = computed(() =>
+  selectedPizza.value?.discount?.is_active
+    ? selectedPizza.value.discount.final_price
+    : selectedPizza.value?.price ?? 0
+)
+
+const sizePrice = computed(() => getSizePrice())
+
+function getToppingName(id: number): string {
+  return toppings.find((t) => t.id === id)?.name ?? ''
+}
+</script>
+
+<style scoped lang="scss">
+.pizza-form {
+  background-color: $color-white;
+
+  &__title {
+    font-size: $font-h1;
+    font-weight: 700;
+    margin-bottom: $space-md;
+    color: $color-primary;
+  }
+
+  &__pizzas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: $space-md;
+    margin-bottom: $space-lg;
+
+     @media (max-width: 1024px) {
+      grid-template-columns: repeat(2, 1fr);
+    } 
+
+    @media (max-width: 600px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__subtitle {
+    font-size: $font-subtitle-md;
+  }
+
+  &__sizes,
+  &__toppings {
+    margin-bottom: $space-lg;
+  }
+
+  &__size {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 500;
+    gap: 8px;
+    margin-right: $space-lg;
+    cursor: pointer;
+
+    input[type='radio'] {
+      display: none;
+    }
+
+    &::before {
+      content: '';
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid $color-gray;
+      border-radius: 50%;
+      background-color: white;
+      transition: all 0.2s ease;
+    }
+
+    &--active {
+      &::before {
+        background-color: $color-primary;
+        border-color: $color-primary;
+        box-shadow: inset 0 0 0 4px white;
+      }
+    }
+  }
+  
+  &__extra-price {
+    color: $color-gray;
+  }
+
+  &__topping {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: $space-xs;
+    padding: $space-sm $space-md;
+    border-radius: $radius-pill;
+    border: 1px solid $color-black-50;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    background-color: $color-white;
+    color: $color-black;
+
+    input {
+      display: none;
+    }
+
+    span {
+      font-size: 13px;
+      color: $color-link;
+    }
+
+    &--active {
+      background-color: $color-primary-30;
+      color: $color-primary;
+      border-color: $color-primary;
+
+      span {
+        color: white;
+      }
+    }
+
+    &--disabled {
+      background-color: $color-disabled;
+      color: $color-text-disabled;
+      cursor: not-allowed;
+      border: none;
+    }
+
+    &:not(&--disabled):hover {
+      border-color: $color-primary;
+      color: $color-primary;
+    }
+  }
+
+  &__content {
+    display: flex;
+    gap: $space-xl;
+
+    @media (max-width: 768px) {
+      flex-direction: column;
+    }
+  }
+
+  &__main {
+    flex: 3;
+  }
+
+  &__sidebar {
+    flex: 1;
+    position: sticky;
+    top: $space-lg;
+    align-self: flex-start;
+    background-color: $color-white;
+  }
+
+  &__summary {
+    padding: $space-lg;
+    background-color: $color-pure-white;
+    border-radius: $radius-md;
+    box-shadow: $shadow-medium;
+    min-width: 220px;
+
+    .summary__title {
+      color: $color-primary;
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: $space-md;
+    }
+
+    .summary__list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 $space-md 0;
+    }
+
+    .summary__item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: $space-xs;
+      color: $color-neutral;
+      font-size: 15px;
+
+      &-price {
+        color: $color-black;
+      }
+    }
+
+    .summary__divider {
+      border: none;
+      border-top: 1px solid $color-disabled;
+      margin: $space-md 0;
+    }
+
+    .summary__total {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: $space-md;
+    }
+
+    .summary__total-amount {
+      color: $color-primary;
+      font-weight: 700;
+    }
+
+    .summary__button {
+      width: 100%;
+      padding: $space-sm $space-md;
+      background-color: $color-primary;
+      color: white;
+      border: none;
+      border-radius: $radius-pill;
+      font-weight: bold;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+
+      &:hover {
+        background-color: $color-primary-darken;
+        color: $color-white;
+      }
+    }
+  }
+}
+</style>
