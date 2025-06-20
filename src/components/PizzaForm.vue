@@ -2,99 +2,41 @@
   <section class="pizza-form">
     <div class="pizza-form__content">
       <div class="pizza-form__main">
-         <!-- Pizza Selection -->
-        <div>
-          <h2 class="pizza-form__title">Choose Your Pizza</h2>
-          <div class="pizza-form__pizzas">
-            <PizzaCard
-            v-for="pizza in pizzas"
-            :key="pizza.id"
-            :pizza="pizza"
-            :isSelected="selectedPizza?.id === pizza.id"
-            @select="onPizzaSelect"
-            />
-          </div>
-        </div>
-
-        <!-- Size Selection -->
-        <div>
-          <div class="pizza-form__sizes" v-if="selectedPizza">
-            <h2 class="pizza-form__title">Custom Pizza</h2>
-            <h3 class="pizza-form__subtitle">Size</h3>
-            <div class="pizza-form__size-options">
-              <label
-              v-for="size in sizes"
-              :key="size.name"
-              class="pizza-form__size"
-              :class="{ 'pizza-form__size--active': selectedSize === size.name }"
-              >
-                <input type="radio" :id="size.name" :value="size.name" v-model="selectedSize" />
-                {{ size.name }}
-                <span v-if="size.extra_price" class="pizza-form__extra-price"> (+{{ size.extra_price }}$)</span>
-              </label>
-            </div>
-          </div>
-        </div>
+        <!-- Selection -->
+        <PizzaSelection
+          :pizzas="pizzas"
+          :selectedPizza="selectedPizza"
+          @select="onPizzaSelect"
+        />
+        <!-- Size -->
+        <PizzaSize
+        :sizes="sizes"
+        v-model:selectedSize="selectedSize"
+        :selectedPizza="selectedPizza"
+        />
 
         <!-- Toppings -->
-        <div>
-          <div class="pizza-form__toppings" v-if="selectedPizza">
-            <h3 class="pizza-form__subtitle">Toppings</h3>
-            <label
-            v-for="topping in toppings"
-            :key="topping.id"
-            class="pizza-form__topping"
-            :class="{
-              'pizza-form__topping--disabled': !isToppingAllowed(topping.id),
-              'pizza-form__topping--active': selectedToppings.includes(topping.id)
-            }"
-            >
-              <input
-              type="checkbox"
-              :value="topping.id"
-              v-model="selectedToppings"
-              :disabled="!isToppingAllowed(topping.id)"
-              />
-              {{ topping.name }} (+${{ topping.price }})
-            </label>
-          </div>
-        </div>
+        <PizzaTopping
+        :toppings="toppings"
+        v-model:selectedToppings="selectedToppings"
+        :selectedPizza="selectedPizza"
+        />
       </div>
 
       <div>
         <!-- Summary -->
-        <div class="pizza-form__sidebar" v-if="selectedPizza">
-          <div class="pizza-form__summary">
-            <h3 class="summary__title">Payment Summary</h3>
-            <ul class="summary__list">
-              <li class="summary__item">
-                <span>{{ selectedPizza?.name }}</span>
-                <span class="summary__item-price">{{ basePrice.toFixed(2) }}$</span>
-              </li>
-              <li class="summary__item">
-                <span>Size - {{ selectedSize }}</span>
-                <span class="summary__item-price">{{ sizePrice.toFixed(2) }}$</span>
-              </li>
-              <li
-              class="summary__item"
-              v-for="id in selectedToppings"
-              :key="id"
-              >
-                <span>{{ getToppingName(id) }}</span>
-                <span class="summary__item-price">{{ getToppingPrice(id).toFixed(2) }}$</span>
-              </li>
-            </ul>
-
-            <hr class="summary__divider" />
-
-            <div class="summary__total">
-              <span>Total Price</span>
-              <span class="summary__total-amount">${{ totalPrice.toFixed(2) }}</span>
-            </div>
-
-            <button class="summary__button" @click="handleOrder">Order Now</button>
-          </div>
-        </div>
+        <PizzaSummary
+        v-if="selectedPizza"
+        :selectedPizza="selectedPizza"
+        :selectedSize="selectedSize"
+        :selectedToppings="selectedToppings"
+        :basePrice="basePrice"
+        :sizePrice="sizePrice"
+        :totalPrice="totalPrice"
+        :getToppingName="getToppingName"
+        :getToppingPrice="getToppingPrice"
+        @order="handleOrder"
+        />
       </div>
     </div>
     <BaseModal v-if="showModal" :onClose="() => (showModal = false)">
@@ -107,32 +49,12 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import PizzaCard from './PizzaCard.vue'
+import type { Pizza, Topping, Size } from '../types/type'
 import BaseModal from './BaseModal.vue'
-
-// types
-interface Pizza {
-  id: number
-  name: string
-  price: number
-  discount: {
-    is_active: boolean
-    final_price: number
-  }
-  toppings: number[]
-}
-
-interface Size {
-  id: number
-  name: string
-  extra_price: number
-}
-
-interface Topping {
-  id: number
-  name: string
-  price: number
-}
+import PizzaSelection from './PizzaSelection.vue'
+import PizzaSize from './PizzaSize.vue'
+import PizzaTopping from './PizzaTopping.vue'
+import PizzaSummary from './PizzaSummary.vue'
 
 // JSON & pizza images
 import pizzaList from '../assets/json/pizza-list.json'
@@ -166,10 +88,6 @@ function onPizzaSelect(pizza: Pizza) {
   selectedPizza.value = pizza
   selectedSize.value = 'Small'
   selectedToppings.value = []
-}
-
-function isToppingAllowed(toppingId: number) {
-  return selectedPizza.value?.toppings.includes(toppingId) ?? false
 }
 
 function getSizePrice(): number {
@@ -207,7 +125,7 @@ function getToppingName(id: number): string {
 }
 </script>
 
-<style scoped lang="scss">
+<style lang="scss">
 .pizza-form {
   background-color: $color-white;
 
